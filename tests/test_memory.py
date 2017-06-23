@@ -600,22 +600,16 @@ def test_load_bytes():
     s = simuvex.SimState(arch='AMD64')
     asdf = s.se.BVS('asdf', 0x1000*8)
     s.memory.store(0x4000, asdf)
-    the_bytes, missing, bytes_read = s.memory.mem.load_bytes(0x4000, 0x1000)
-    assert len(missing) == 0
-    assert len(the_bytes) == 1
-    assert bytes_read == 0x1000
+    items = s.memory.mem.load_objects(0x4000, 0x1000)
+    assert len(items) == 1
 
     fdsa = s.se.BVV('fdsa')
     s.memory.store(0x4004, fdsa)
-    the_bytes, missing, bytes_read = s.memory.mem.load_bytes(0x4000, 0x1000)
-    assert len(missing) == 0
-    assert len(the_bytes) == 3
-    assert bytes_read == 0x1000
+    items = s.memory.mem.load_objects(0x4000, 0x1000)
+    assert len(items) == 3
 
-    the_bytes, missing, bytes_read = s.memory.mem.load_bytes(0x8000, 0x2000)
-    assert len(the_bytes) == 0
-    assert len(missing) == 2
-    assert bytes_read == 0x2000
+    items = s.memory.mem.load_objects(0x8000, 0x2000)
+    assert len(items) == 0
 
 def test_fast_memory():
     s = simuvex.SimState(add_options={simuvex.o.FAST_REGISTERS, simuvex.o.FAST_MEMORY})
@@ -627,7 +621,26 @@ def test_fast_memory():
 
     _concrete_memory_tests(s)
 
+def test_crosspage_read():
+    state = SimState(arch='ARM')
+    state.regs.sp = 0x7fff0008
+    state.stack_push(0x44556677)
+    state.stack_push(0x1)
+    state.stack_push(0x2)
+    state.stack_push(0x3)
+    state.stack_push(0x4)
+    state.stack_push(0x99887766)
+    state.stack_push(0x5)
+    state.stack_push(0x105c8)
+    state.stack_push(0x11223344)
+    state.stack_push(0x10564)
+
+    r = state.memory.load(state.regs.sp, 40)
+    assert "77665544" in state.solver.any_str(r).encode('hex')
+    #assert s.solver.eval(r, 2) == ( 0xffeeddccbbaa998877665544, )
+
 if __name__ == '__main__':
+    test_crosspage_read()
     test_fast_memory()
     test_load_bytes()
     test_false_condition()

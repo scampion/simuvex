@@ -30,6 +30,13 @@ class SimMemoryObject(object):
         return self._length
 
     @property
+    def last_addr(self):
+        return self._base + self._length - 1
+
+    def includes(self, x):
+        return 0 <= x - self._base < self._length
+
+    @property
     def object(self):
         return self._object
 
@@ -43,6 +50,9 @@ class SimMemoryObject(object):
         return self.object[left:right]
 
     def __eq__(self, other):
+        if type(other) is not SimMemoryObject:
+            return NotImplemented
+
         return self._object is other._object and self._base == other._base and hash(self._length) == hash(other._length)
 
     def __ne__(self, other):
@@ -50,4 +60,3 @@ class SimMemoryObject(object):
 
     def __repr__(self):
         return "MO(%s)" % (self.object)
-
