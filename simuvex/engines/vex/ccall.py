@@ -808,6 +808,7 @@ def amd64g_calculate_rflags_all(state, cc_op, cc_dep1, cc_dep2, cc_ndep):
 def amd64g_calculate_rflags_c(state, cc_op, cc_dep1, cc_dep2, cc_ndep):
     return pc_calculate_rdata_c(state, cc_op, cc_dep1, cc_dep2, cc_ndep, platform='AMD64')
 
+
 ###########################
 ### X86-specific ones ###
 ###########################
@@ -871,6 +872,45 @@ def x86g_calculate_RCR(state, arg, rot_amt, eflags_in, sz):
                  (of << data['X86']['CondBitOffsets']['G_CC_SHIFT_O'])
 
     return (eflags_in << 32) | arg, [ ]
+
+
+def x86g_calculate_RCL(state, arg, rot_amt, eflags_in, sz):
+    # make sure sz is not symbolic
+    if sz.symbolic:
+        raise SimError('Hit a symbolic "sz" in x86g_calculate_RCR. Panic.')
+
+    # convert sz to concrete value
+    sz = state.se.exactly_int(sz)
+    bits = sz * 8
+
+    # construct bitvec to use for rotation amount - 9/17/33 bits
+    if bits == 32:
+        sized_amt = (rot_amt & 0x1f).zero_extend(1)
+    else:
+        sized_amt = (rot_amt & 0x1f)[bits:0]
+
+    # construct bitvec to use for rotating value - 9/17/33 bits
+    carry_bit_in = eflags_in[data['X86']['CondBitOffsets']['G_CC_SHIFT_C']]
+    sized_arg_in = arg[bits-1:0]
+    rotatable_in = carry_bit_in.concat(sized_arg_in)
+
+    # compute and extract
+    rotatable_out = state.se.RotateLeft(rotatable_in, sized_amt)
+    sized_arg_out = rotatable_out[bits-1:0]
+    carry_bit_out = rotatable_out[bits]
+    arg_out = sized_arg_out.zero_extend(32 - bits)
+    overflow_bit_out = carry_bit_out ^ arg_out[bits-1]
+
+    # construct final answer
+    cf = carry_bit_out.zero_extend(31)
+    of = overflow_bit_out.zero_extend(31)
+    eflags_out = eflags_in
+    eflags_out &= ~(data['X86']['CondBitMasks']['G_CC_MASK_C'] | data['X86']['CondBitMasks']['G_CC_MASK_O'])
+    eflags_out |= (cf << data['X86']['CondBitOffsets']['G_CC_SHIFT_C']) | \
+                  (of << data['X86']['CondBitOffsets']['G_CC_SHIFT_O'])
+
+    return eflags_out.concat(arg_out), []
+
 
 def x86g_calculate_condition(state, cond, cc_op, cc_dep1, cc_dep2, cc_ndep):
     if USE_SIMPLIFIED_CCALLS in state.options:
